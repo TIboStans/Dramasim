@@ -169,7 +169,25 @@ impl CPU {
     }
 }
 
-enum Insn { HIA, BIG, OPT, AFT, VER, DEL, MOD, VGL, SPR, VSP, SBR, KTG, LEZ, DRU, NWL, DRS, STP }
+pub enum Insn {
+    HIA = 11,
+    BIG = 12,
+    OPT = 21,
+    AFT = 22,
+    VER = 23,
+    DEL = 24,
+    MOD = 25,
+    VGL = 31,
+    SPR = 32,
+    VSP = 33,
+    SBR = 41,
+    KTG = 42,
+    LEZ = 71,
+    DRU = 72,
+    NWL = 73,
+    DRS = 74,
+    STP = 99,
+}
 
 impl From<usize> for Insn {
     fn from(n: usize) -> Self {
