@@ -27,3 +27,19 @@ pub enum ConditionCode {
     Eql = 0,
     Neg = 2,
 }
+
+impl ConditionCode {
+    pub fn from_discriminant(discriminant: usize) -> Self {
+        discriminant as ConditionCode
+    }
+
+    pub fn from_number(number: isize) -> Self {
+        if number < 0 {
+            ConditionCode::Neg
+        } else if number == 0 {
+            ConditionCode::Eql
+        } else {
+            ConditionCode::Pos
+        }
+    }
+}
