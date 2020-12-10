@@ -13,7 +13,7 @@ macro_rules! num_range {
 
 pub struct CPU {
     pub instruction_pointer: usize,
-    pub instruction_register: usize,
+    pub instruction_register: isize,
     pub condition_code: ConditionCode,
     pub accumulators: [isize; 10],
     pub stopped: bool,
@@ -35,15 +35,13 @@ impl CPU {
             // Get instructions
 
             let register = ram[self.instruction_pointer];
-            self.instruction_register = register as usize;
+            self.instruction_register = register;
             self.instruction_pointer += 1;
 
             // Analyse Instruction
             // 01_23_4_5_6789
             // fc_mo_a_i_operand
-            let mut command = self.instruction_register;
-            // convert signed storage tu unsigned instruction
-            if command < 0 {command += 10_000_000_000}
+            let command = if self.instruction_register < 0 {(self.instruction_register + 100_000_000_000) as usize} else {self.instruction_register as usize};
 
             let fc = num_range!(command, 0; 2);
             let modus = num_range!(command, 2; 4);
