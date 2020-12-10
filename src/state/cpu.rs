@@ -117,7 +117,7 @@ impl CPU {
                     self.condition_code = ConditionCode::from_number(operand);
                 }
                 Insn::VGL => {
-                    self.condition_code = ConditionCode::from_number(operand);
+                    self.condition_code = ConditionCode::from_number(self.accumulators[acc] - operand);
                 }
                 Insn::SPR => {
                     self.instruction_pointer = ram::address(operand);
