@@ -1,5 +1,5 @@
 [package]
-name = "Dramasim"
+name = "drama_sim"
 version = "0.1.0"
 authors = ["Ridan Vandenbergh <ridanvandenbergh@gmail.com>"]
 edition = "2018"
