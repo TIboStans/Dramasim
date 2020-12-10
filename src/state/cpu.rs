@@ -1,5 +1,3 @@
-use crate::state::cpu::ConditionCode::Eql;
-
 pub struct CPU {
     pub instruction_counter: usize,
     pub instruction_register: usize,
@@ -13,7 +11,7 @@ impl CPU {
         CPU {
             instruction_counter: 0,
             instruction_register: 0,
-            condition_code: Eql,
+            condition_code: ConditionCode::Eql,
             accumulators: [0; 10],
             stopped: false,
         }
