@@ -2,17 +2,14 @@
 #![feature(or_patterns)]
 #![feature(arbitrary_enum_discriminant)]
 
-#[macro_use]
-extern crate scan_fmt;
-
 use std::collections::HashMap;
-use std::convert::{TryInto, TryFrom};
+use std::convert::TryInto;
 use std::num::ParseIntError;
 
 type NumberedLine<'a> = (usize, &'a str);
 
 fn main() {
-    const INPUT: &str = include_str!("test");
+    const INPUT: &str = include_str!("test_resgr");
     let filter = to_filtered_lines(INPUT);
     let expanded = to_numbered_lines(&filter);
     let labels = map_labels(&expanded);
@@ -43,7 +40,7 @@ fn to_numbered_lines<'a>(input: &Vec<&'a str>) -> Vec<NumberedLine<'a>> {
     let mut counter = 0usize;
     let mut lines = Vec::new();
     for line in input {
-        let (_, mut line_without_label) = omit_label(line);
+        let (_, line_without_label) = omit_label(line);
         let (insn, operand) = trimmed_split_space(line_without_label);
         if insn == "RESGR" {
             if let Some(operand) = operand {
@@ -53,15 +50,16 @@ fn to_numbered_lines<'a>(input: &Vec<&'a str>) -> Vec<NumberedLine<'a>> {
             } else {
                 panic!("RESGR without operand"); // TODO: don't
             }
+        } else {
+            lines.push((counter, *line));
+            counter += 1;
         }
-
-        lines.push((counter, *line));
-        counter += 1;
     }
 
     lines
 }
 
+/// Inspects numbered lines, returning a map of all labels and their corresponding memory address.
 fn map_labels<'a>(numbered_lines: &Vec<NumberedLine<'a>>) -> HashMap<&'a str, usize> {
     numbered_lines.iter()
         .filter_map(|(line_number, line)| {
