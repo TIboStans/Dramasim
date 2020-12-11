@@ -11,6 +11,12 @@ pub enum CompilationError<'a> {
         value: isize,
     },
     ResgrNoOperandError(Line<'a>),
+    NoOperand {
+        line: Line<'a>,
+        opcode: &'a str,
+    },
+    Incomprehensible(Line<'a>, EvalError),
+    NoCompilation,
 }
 
 impl std::error::Error for CompilationError<'_> {}
@@ -20,7 +26,10 @@ impl std::fmt::Display for CompilationError<'_> {
         match self {
             CompilationError::MathEvalError(_, e) => std::fmt::Display::fmt(e, f),
             CompilationError::NegativeResgrError { .. } => write!(f, "RESGR expects a non-negative operand"),
-            CompilationError::ResgrNoOperandError(_) => write!(f, "RESGR must have one operand")
+            CompilationError::ResgrNoOperandError(_) => write!(f, "RESGR must have one operand"),
+            CompilationError::NoCompilation => write!(f, "No compilation happened"),
+            CompilationError::NoOperand { opcode, .. } => write!(f, "Instruction `{}` expects an operand, but you provided none", opcode),
+            CompilationError::Incomprehensible(..) => write!(f, "Not a valid instruction or integer expression"),
         }
     }
 }
