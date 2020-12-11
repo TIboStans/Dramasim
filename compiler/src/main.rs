@@ -6,7 +6,12 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::num::ParseIntError;
 
-type NumberedLine<'a> = (usize, &'a str);
+#[derive(Debug)]
+struct Line<'a> {
+    address: usize,
+    line_number: usize,
+    line: &'a str
+}
 
 fn main() {
     const INPUT: &str = include_str!("test_resgr");
@@ -42,23 +47,29 @@ fn as_filtered_lines(input: &str) -> Vec<&str> {
 }
 
 /// Parses filtered code, expanding RESGR where needed.
-fn as_numbered_lines<'a>(input: &Vec<&'a str>) -> Vec<NumberedLine<'a>> {
-    let mut counter = 0usize;
+fn as_numbered_lines<'a>(input: &Vec<&'a str>) -> Vec<Line<'a>> {
+    let mut address_counter = 0usize;
     let mut lines = Vec::new();
-    for line in input {
+    for line_number in 0..input.len() {
+        let line = input[line_number];
+
         let (_, line_without_label) = omit_label(line);
         let (insn, operand) = trimmed_split_space(line_without_label);
         if insn == "RESGR" {
             if let Some(operand) = operand {
                 let operand = calculate_expression(operand).unwrap(); // TODO: don't unwrap, expression must be valid
                 let operand: usize = operand.try_into().unwrap(); // TODO: don't unwrap: operand must be in bounds of an usize
-                counter += operand;
+                address_counter += operand;
             } else {
                 panic!("RESGR without operand"); // TODO: don't
             }
         } else {
-            lines.push((counter, *line));
-            counter += 1;
+            lines.push(Line {
+                address: address_counter,
+                line_number: line_number + 1, // line numbers start at 1
+                line
+            });
+            address_counter += 1;
         }
     }
 
@@ -66,12 +77,12 @@ fn as_numbered_lines<'a>(input: &Vec<&'a str>) -> Vec<NumberedLine<'a>> {
 }
 
 /// Inspects numbered lines, returning a map of all labels and their corresponding memory address.
-fn map_labels<'a>(numbered_lines: &Vec<NumberedLine<'a>>) -> HashMap<&'a str, usize> {
+fn map_labels<'a>(numbered_lines: &Vec<Line<'a>>) -> HashMap<&'a str, usize> {
     numbered_lines.iter()
-        .filter_map(|(line_number, line)| {
-            let (label, _) = omit_label(line);
+        .filter_map(|line| {
+            let (label, _) = omit_label(line.line);
 
-            label.map(|label| (label, *line_number))
+            label.map(|label| (label, line.line_number))
         }).collect()
 }
 
