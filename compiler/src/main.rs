@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 use std::convert::TryInto;
-use std::num::ParseIntError;
+use mexprp::{Answer, EvalError};
 
 #[derive(Debug)]
 struct Line<'a> {
@@ -107,9 +107,15 @@ fn trimmed_split_space(line: &str) -> (&str, Option<&str>) {
     (splitn.next().unwrap().trim(), splitn.next().map(|s| s.trim()))
 }
 
-fn calculate_expression(expr: &str) -> Result<isize, ParseIntError> {
-    // TODO: actually calculate expressions
-    expr.parse()
+/// Calculate an integer expression.
+/// If multiple answers are possible, arbitrarily return the first one found.
+/// Answers are calculated in f64 and converted to isize.
+fn calculate_expression(expr: &str) -> Result<isize, EvalError> {
+    match mexprp::eval::<f64>(expr) {
+        Ok(Answer::Single(answer)) => Ok(answer as isize),
+        Ok(Answer::Multiple(v)) => Ok(*v.first().unwrap() as isize),
+        Err(e) => Err(e)
+    }
 }
 
 #[inline]
