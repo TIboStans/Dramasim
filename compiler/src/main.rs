@@ -1,12 +1,14 @@
 #![feature(try_trait)]
 #![feature(or_patterns)]
 #![feature(arbitrary_enum_discriminant)]
+#![feature(pattern)]
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt::Debug;
 use mexprp::{Answer, EvalError};
 use crate::compilation_error::*;
+use std::str::pattern::Pattern;
 
 mod compilation_error;
 
@@ -86,7 +88,7 @@ fn as_numbered_lines<'a>(input: &Vec<&'a str>) -> Result<Vec<Line<'a>>, Compilat
         };
 
         let (_, line_without_label) = omit_label(line);
-        let (insn, operand) = trimmed_split_space(line_without_label);
+        let (insn, operand) = trimmed_split(line_without_label, ' ');
         if insn == "RESGR" {
             if let Some(operand) = operand {
                 let value = calculate_expression(operand)
@@ -137,7 +139,7 @@ fn to_numerical_representation(lines: Vec<Line>) -> Result<Vec<(usize, isize)>, 
 }
 
 fn insn_to_numerical<'a>(insn: &'a str, line: &Line<'a>) -> Result<isize, CompilationError<'a>> {
-    let (original_opcode, rhs) = trimmed_split_space(insn);
+    let (original_opcode, rhs) = trimmed_split(insn, ' ');
     let opcode = original_opcode.to_uppercase();
     let opcode = opcode.as_str();
 
@@ -151,7 +153,15 @@ fn insn_to_numerical<'a>(insn: &'a str, line: &Line<'a>) -> Result<isize, Compil
         _ => {}
     }
 
-    // All instructions without operands have been parsed at this point
+    let (opcode, _int) = trimmed_split(opcode, '.');
+
+    const LEFTOVER_INSNS: [&str; 13] = ["HIA", "BIG", "OPT", "AFT", "VER", "DEL", "MOD", "VGL", "SPR", "VSP", "SBR", "BST", "HST"];
+    if !LEFTOVER_INSNS.contains(&opcode) {
+        return Err(CompilationError::NoCompilation)
+    }
+
+    // All instructions without operands have been parsed at this point,
+    // and any invalid instructions have already thrown a NoCompilation error.
     // - let's toss an error if there is no right hand side at this point.
     let _rhs = match rhs {
         Some(s) => s,
@@ -177,8 +187,8 @@ fn omit_label(line: &str) -> (Option<&str>, &str) {
     (lhs, rhs)
 }
 
-fn trimmed_split_space(line: &str) -> (&str, Option<&str>) {
-    let mut splitn = line.trim().splitn(2, ' ');
+fn trimmed_split<'a, P: Pattern<'a>>(string: &'a str, pattern: P) -> (&'a str, Option<&'a str>) {
+    let mut splitn = string.trim().splitn(2, pattern);
     (splitn.next().unwrap().trim(), splitn.next().map(|s| s.trim()))
 }
 
