@@ -19,6 +19,19 @@ pub enum CompilationError<'a> {
     NoCompilation,
 }
 
+impl CompilationError<'_> {
+    pub fn get_line(&self) -> Option<&Line> {
+        match self {
+            CompilationError::MathEvalError(l, ..) => Some(l),
+            CompilationError::NegativeResgrError { line, .. } => Some(line),
+            CompilationError::ResgrNoOperandError(line) => Some(line),
+            CompilationError::NoOperand { line, .. } => Some(line),
+            CompilationError::Incomprehensible(line, ..) => Some(line),
+            CompilationError::NoCompilation => None
+        }
+    }
+}
+
 impl std::error::Error for CompilationError<'_> {}
 
 impl std::fmt::Display for CompilationError<'_> {

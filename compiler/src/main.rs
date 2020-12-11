@@ -19,7 +19,26 @@ pub struct Line<'a> {
 
 fn main() {
     const INPUT: &str = include_str!("test_resgr");
-    println!("{}", compile(INPUT).unwrap_err());
+    match compile(INPUT) {
+        Ok(c) => {
+            println!("Compilation successful!");
+            println!();
+            for (address, value) in c.iter() {
+                println!("{:04}: {:010}", address, value)
+            }
+        }
+        Err(e) => {
+            println!("Compilation error:");
+            if let Some(line) = e.get_line() {
+                let line_str = line.line;
+                println!("\nOn line {} \t[address {}]", line.line_number, line.address);
+                println!("\t{}", line_str);
+                println!("\t{} {}", (0..line_str.len()).map(|_| '^').collect::<String>(), e)
+            } else {
+                println!("{}", e);
+            }
+        }
+    }
 }
 
 fn compile(source_code: &str) -> Result<Box<[(usize, isize)]>, CompilationError> {
