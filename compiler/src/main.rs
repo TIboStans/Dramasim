@@ -7,13 +7,16 @@ extern crate scan_fmt;
 
 use std::collections::HashMap;
 use std::convert::{TryInto, TryFrom};
+use std::num::ParseIntError;
 
 type NumberedLine<'a> = (usize, &'a str);
 
 fn main() {
     const INPUT: &str = include_str!("test");
-    for line in to_filtered_lines(INPUT) {
-        println!("{}", line);
+    let filter = to_filtered_lines(INPUT);
+    let expanded = to_numbered_lines(&filter);
+    for line in expanded {
+        println!("{:?}", line);
     }
 }
 
@@ -33,6 +36,30 @@ fn to_filtered_lines(input: &str) -> Vec<&str> {
     }).collect()
 }
 
+/// Parses filtered code, expanding RESGR where needed.
+fn to_numbered_lines<'a>(input: &Vec<&'a str>) -> Vec<NumberedLine<'a>> {
+    let mut counter = 0usize;
+    let mut lines = Vec::new();
+    for line in input {
+        let (_, mut line_without_label) = omit_label(line);
+        let (insn, operand) = trimmed_split_space(line_without_label);
+        if insn == "RESGR" {
+            if let Some(operand) = operand {
+                let operand = calculate_expression(operand).unwrap(); // TODO: don't unwrap, expression must be valid
+                let operand: usize = operand.try_into().unwrap(); // TODO: don't unwrap: operand must be in bounds of an usize
+                counter += operand;
+            } else {
+                panic!("RESGR without operand"); // TODO: don't
+            }
+        }
+
+        lines.push((counter, *line));
+        counter += 1;
+    }
+
+    lines
+}
+
 /// Removes the label from a string without any other operations such as trimming. Label may be `None` if there is none present.
 fn omit_label(line: &str) -> (Option<&str>, &str) {
     // TODO: omit string literals from labels:
@@ -47,6 +74,16 @@ fn omit_label(line: &str) -> (Option<&str>, &str) {
     let rhs = split.next().unwrap();
     let lhs = split.next();
     (lhs, rhs)
+}
+
+fn trimmed_split_space(line: &str) -> (&str, Option<&str>) {
+    let mut splitn = line.trim().splitn(2, ' ');
+    (splitn.next().unwrap().trim(), splitn.next().map(|s| s.trim()))
+}
+
+fn calculate_expression(expr: &str) -> Result<isize, ParseIntError> {
+    // TODO: actually calculate expressions
+    expr.parse()
 }
 
 #[inline]
