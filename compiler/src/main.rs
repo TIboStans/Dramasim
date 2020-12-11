@@ -3,25 +3,35 @@
 #![feature(arbitrary_enum_discriminant)]
 
 use std::collections::HashMap;
-use std::convert::TryInto;
+use std::convert::TryFrom;
+use std::fmt::Debug;
 use mexprp::{Answer, EvalError};
+use crate::compilation_error::*;
 
-#[derive(Debug)]
-struct Line<'a> {
+mod compilation_error;
+
+#[derive(Debug, Clone)]
+pub struct Line<'a> {
     address: usize,
     line_number: usize,
-    line: &'a str
+    line: &'a str,
 }
 
 fn main() {
     const INPUT: &str = include_str!("test_resgr");
-    let filter = as_filtered_lines(INPUT);
-    let expanded = as_numbered_lines(&filter);
+    println!("{}", compile(INPUT).unwrap_err());
+}
+
+fn compile(source_code: &str) -> Result<&[(usize, usize)], CompilationError> {
+    let filter = as_filtered_lines(source_code);
+    let expanded = as_numbered_lines(&filter)?;
     let labels = map_labels(&expanded);
     for line in expanded {
         println!("{:?}", line);
     }
     println!("{:#?}", labels);
+
+    Ok(&[(0, 0)])
 }
 
 /// Returns a vec of lines with comments, trailing whitespace, and leading whitespace removed.
@@ -47,33 +57,37 @@ fn as_filtered_lines(input: &str) -> Vec<&str> {
 }
 
 /// Parses filtered code, expanding RESGR where needed.
-fn as_numbered_lines<'a>(input: &Vec<&'a str>) -> Vec<Line<'a>> {
+fn as_numbered_lines<'a>(input: &Vec<&'a str>) -> Result<Vec<Line<'a>>, CompilationError<'a>> {
     let mut address_counter = 0usize;
     let mut lines = Vec::new();
     for line_number in 0..input.len() {
         let line = input[line_number];
 
+        let line_struct = Line {
+            address: address_counter,
+            line_number: line_number + 1, // line numbers start at 1
+            line,
+        };
+
         let (_, line_without_label) = omit_label(line);
         let (insn, operand) = trimmed_split_space(line_without_label);
         if insn == "RESGR" {
             if let Some(operand) = operand {
-                let operand = calculate_expression(operand).unwrap(); // TODO: don't unwrap, expression must be valid
-                let operand: usize = operand.try_into().unwrap(); // TODO: don't unwrap: operand must be in bounds of an usize
-                address_counter += operand;
+                let value = calculate_expression(operand)
+                    .map_err(|e| CompilationError::MathEvalError(line_struct.clone(), e))?;
+                let value: usize = usize::try_from(value)
+                    .map_err(|_| CompilationError::NegativeResgrError { line: line_struct, expr: operand, value })?;
+                address_counter += value;
             } else {
-                panic!("RESGR without operand"); // TODO: don't
+                return Err(CompilationError::ResgrNoOperandError(line_struct))
             }
         } else {
-            lines.push(Line {
-                address: address_counter,
-                line_number: line_number + 1, // line numbers start at 1
-                line
-            });
+            lines.push(line_struct);
             address_counter += 1;
         }
     }
 
-    lines
+    Ok(lines)
 }
 
 /// Inspects numbered lines, returning a map of all labels and their corresponding memory address.
@@ -119,6 +133,7 @@ fn calculate_expression(expr: &str) -> Result<isize, EvalError> {
 }
 
 #[inline]
+#[allow(unused)]
 fn insn(op: isize, m1: isize, m2: isize, acc: isize, ind: isize, operand: isize) -> isize {
     let mut o = operand % 10_000;
     if o < 0 { o += 10_000 }
