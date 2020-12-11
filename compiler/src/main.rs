@@ -10,8 +10,8 @@ type NumberedLine<'a> = (usize, &'a str);
 
 fn main() {
     const INPUT: &str = include_str!("test_resgr");
-    let filter = to_filtered_lines(INPUT);
-    let expanded = to_numbered_lines(&filter);
+    let filter = as_filtered_lines(INPUT);
+    let expanded = as_numbered_lines(&filter);
     let labels = map_labels(&expanded);
     for line in expanded {
         println!("{:?}", line);
@@ -21,7 +21,7 @@ fn main() {
 
 /// Returns a vec of lines with comments, trailing whitespace, and leading whitespace removed.
 /// Takes everything until EOF or EINDPR
-fn to_filtered_lines(input: &str) -> Vec<&str> {
+fn as_filtered_lines(input: &str) -> Vec<&str> {
     let mut lines = Vec::new();
     for line in input.lines() {
         // remove comments
@@ -42,7 +42,7 @@ fn to_filtered_lines(input: &str) -> Vec<&str> {
 }
 
 /// Parses filtered code, expanding RESGR where needed.
-fn to_numbered_lines<'a>(input: &Vec<&'a str>) -> Vec<NumberedLine<'a>> {
+fn as_numbered_lines<'a>(input: &Vec<&'a str>) -> Vec<NumberedLine<'a>> {
     let mut counter = 0usize;
     let mut lines = Vec::new();
     for line in input {
