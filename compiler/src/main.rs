@@ -20,19 +20,25 @@ fn main() {
 }
 
 /// Returns a vec of lines with comments, trailing whitespace, and leading whitespace removed.
+/// Takes everything until EOF or EINDPR
 fn to_filtered_lines(input: &str) -> Vec<&str> {
-    input.lines().filter_map(|line| {
+    let mut lines = Vec::new();
+    for line in input.lines() {
         // remove comments
         let without_comment = line.splitn(2, '|').next().unwrap();
         // trim whitespace
         let x = without_comment.trim();
 
-        if x.is_empty() {
-            None
-        } else {
-            Some(x)
+        if x == "EINDPR" {
+            break;
         }
-    }).collect()
+
+        if !x.is_empty() {
+            lines.push(x);
+        }
+    }
+
+    lines
 }
 
 /// Parses filtered code, expanding RESGR where needed.
