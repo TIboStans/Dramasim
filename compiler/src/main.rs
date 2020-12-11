@@ -92,12 +92,12 @@ fn as_numbered_lines<'a>(input: &Vec<&'a str>) -> Result<Vec<Line<'a>>, Compilat
         if insn == "RESGR" {
             if let Some(operand) = operand {
                 let value = calculate_expression(operand)
-                    .map_err(|e| CompilationError::MathEvalError(line_struct.clone(), e))?;
+                    .map_err(|e| CompilationError::MathEval(line_struct.clone(), e))?;
                 let value: usize = usize::try_from(value)
-                    .map_err(|_| CompilationError::NegativeResgrError { line: line_struct, expr: operand, value })?;
+                    .map_err(|_| CompilationError::NegativeRegisters { line: line_struct, expr: operand, value })?;
                 address_counter += value;
             } else {
-                return Err(CompilationError::ResgrNoOperandError(line_struct));
+                return Err(CompilationError::ResgrNoOperand(line_struct));
             }
         } else {
             lines.push(line_struct);
