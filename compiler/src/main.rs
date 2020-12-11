@@ -15,9 +15,11 @@ fn main() {
     const INPUT: &str = include_str!("test");
     let filter = to_filtered_lines(INPUT);
     let expanded = to_numbered_lines(&filter);
+    let labels = map_labels(&expanded);
     for line in expanded {
         println!("{:?}", line);
     }
+    println!("{:#?}", labels);
 }
 
 /// Returns a vec of lines with comments, trailing whitespace, and leading whitespace removed.
@@ -58,6 +60,15 @@ fn to_numbered_lines<'a>(input: &Vec<&'a str>) -> Vec<NumberedLine<'a>> {
     }
 
     lines
+}
+
+fn map_labels<'a>(numbered_lines: &Vec<NumberedLine<'a>>) -> HashMap<&'a str, usize> {
+    numbered_lines.iter()
+        .filter_map(|(line_number, line)| {
+            let (label, _) = omit_label(line);
+
+            label.map(|label| (label, *line_number))
+        }).collect()
 }
 
 /// Removes the label from a string without any other operations such as trimming. Label may be `None` if there is none present.
