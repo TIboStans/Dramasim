@@ -97,7 +97,7 @@ fn as_numbered_lines<'a>(input: &Vec<&'a str>) -> Result<Vec<Line<'a>>, Compilat
                     .map_err(|_| CompilationError::NegativeRegisters { line: line_struct, expr: operand, value })?;
                 address_counter += value;
             } else {
-                return Err(CompilationError::ResgrNoOperand(line_struct));
+                return Err(CompilationError::NoOperand { line: line_struct, opcode: "RESGR" });
             }
         } else {
             lines.push(line_struct);
