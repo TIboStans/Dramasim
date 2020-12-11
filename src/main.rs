@@ -7,10 +7,11 @@ mod state {
 }
 
 mod ui {
-    mod interface;
+    pub mod interface;
 }
 
 fn main() {
+    ui::interface::gui();
     let mut cpu = CPU::new();
     let mut ram = RAM::new();
 
