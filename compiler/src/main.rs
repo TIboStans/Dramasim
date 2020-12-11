@@ -150,6 +150,7 @@ fn insn_to_numerical<'a>(insn: &'a str, line: &Line<'a>) -> Result<isize, Compil
         "NWL" => return Ok(self::insn(73, 0, 0, 0, 0, 0)),
         "DRS" => return Ok(self::insn(74, 0, 0, 0, 0, 0)),
         "STP" => return Ok(self::insn(99, 0, 0, 0, 0, 0)),
+        "NOP" => return Ok(0),
         _ => {}
     }
 
