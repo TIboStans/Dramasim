@@ -124,7 +124,7 @@ fn map_labels<'a>(numbered_lines: &Vec<Line<'a>>) -> HashMap<&'a str, usize> {
         .filter_map(|line| {
             let (label, _) = omit_label(line.line);
 
-            label.map(|label| (label, line.line_number))
+            label.map(|label| (label, line.address))
         }).collect()
 }
 
