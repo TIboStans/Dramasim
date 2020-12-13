@@ -10,6 +10,7 @@ use mexprp::{Answer, EvalError, Context, Term};
 use crate::compilation_error::*;
 use std::str::pattern::Pattern;
 use std::ops::Try;
+use std::str::FromStr;
 
 mod compilation_error;
 
@@ -155,14 +156,24 @@ fn insn_to_numerical<'a>(insn: &'a str, line: &Line<'a>, evaluation_context: &Co
     let opcode = opcode.as_str();
 
     if let Some(insn) = parse_no_operand(opcode) {
-        return Ok(insn)
+        return Ok(insn);
     }
 
     let (opcode, int) = trimmed_split(opcode, '.');
 
+    let int: Option<char> = match int {
+        None => None,
+        Some(int) => {
+            if int.len() != 1 {
+                return Err(CompilationError::TooLongInterpretation(line.clone(), int.to_string()))
+            }
+            Some(char::from_str(int).unwrap().to_ascii_lowercase())
+        }
+    };
+
     const LEFTOVER_INSNS: [&str; 13] = ["HIA", "BIG", "OPT", "AFT", "VER", "DEL", "MOD", "VGL", "SPR", "VSP", "SBR", "BST", "HST"];
     if !LEFTOVER_INSNS.contains(&opcode) {
-        return Err(CompilationError::NoCompilation)
+        return Err(CompilationError::NoCompilation);
     }
 
     // All instructions without operands have been parsed at this point,
@@ -172,12 +183,12 @@ fn insn_to_numerical<'a>(insn: &'a str, line: &Line<'a>, evaluation_context: &Co
         Some(s) => s,
         None => return Err(CompilationError::NoOperand {
             line: line.clone(),
-            opcode: original_opcode
+            opcode: original_opcode,
         })
     };
 
     match parse_single_operand(opcode, &int, rhs, line.clone(), evaluation_context) {
-        Err(CompilationError::NoCompilation) => {}, // do nothing
+        Err(CompilationError::NoCompilation) => {} // do nothing
         Err(e) => return Err(e),
         Ok(insn) => return Ok(insn)
     };
@@ -200,7 +211,7 @@ fn parse_no_operand(opcode: &str) -> Option<isize> {
 
 fn operand_to_reg(op: &str) -> Option<usize> {
     if op.len() != 2 || &op[0..1] != "R" {
-        return None
+        return None;
     }
 
     let r = &op[1..2];
@@ -210,7 +221,7 @@ fn operand_to_reg(op: &str) -> Option<usize> {
     Some(r)
 }
 
-macro_rules! deny_interpretation {
+macro_rules! deny_any_interpretation {
     ($int:expr, $opcode:expr, $line:expr) => {
         if let Some(_) = $int {
             return Err(CompilationError::UnexpectedInterpretation($line, $opcode))
@@ -218,34 +229,55 @@ macro_rules! deny_interpretation {
     };
 }
 
+macro_rules! allow_only_interpretations {
+    ($int:expr, $opcode:expr, $line:expr, $default:expr, $($i:expr), *) => {
+        {
+            match $int {
+                None => $default,
+                Some(i) => match i {
+                    $default => $default,
+                    $(
+                        $i => $i,
+                    )*
+                    _ => return Err(CompilationError::UnsupportedInterpretation($line, $opcode, vec!($default, $($i)*,)))
+                }
+            }
+        }
+    };
+}
+
 #[inline]
-fn parse_single_operand<'a>(opcode: &str, int: &Option<&str>, rhs: &'a str, line: Line<'a>, evaluation_context: &Context<f64>) -> Result<isize, CompilationError<'a>> {
+fn parse_single_operand<'a>(opcode: &str, int: &Option<char>, rhs: &'a str, line: Line<'a>, evaluation_context: &Context<f64>) -> Result<isize, CompilationError<'a>> {
     // Single-operand instructions:
     match opcode {
         "HST" => {
-            deny_interpretation!(int, opcode.to_string(), line);
+            deny_any_interpretation!(int, opcode.to_string(), line);
             // HST becomes HIA <reg>, 0(R8+)
             let r = operand_to_reg(rhs).into_result().map_err(|_| CompilationError::NotARegister {
                 line,
-                malformed_operand: rhs
+                malformed_operand: rhs,
             })?;
             Ok(self::insn(11 /*HIA*/, 1 /*value*/, 4 /*indexation post-inc*/, r as isize, 8, 0))
-        },
+        }
         "BST" => {
-            deny_interpretation!(int, opcode.to_string(), line);
+            deny_any_interpretation!(int, opcode.to_string(), line);
             // BST becomes BIG <reg>, 0(-R8)
             let r = operand_to_reg(rhs).into_result().map_err(|_| CompilationError::NotARegister {
                 line,
-                malformed_operand: rhs
+                malformed_operand: rhs,
             })?;
             Ok(self::insn(12 /*BIG*/, 1 /*value*/, 5 /*indexation pre-dec*/, r as isize, 8, 0))
-        },
+        }
         "SBR" => {
+            let int = allow_only_interpretations!(int, opcode.to_string(), line, 'd', 'i');
             let address = calculate_expression(rhs, evaluation_context)
                 .map_err(|e| CompilationError::MathEval(line, e))?;
-            // TODO: .i
-            Ok(self::insn(41 /*SBR*/, 9, 9, 9, 9, address))
-        },
+            Ok(match int {
+                'd' => self::insn(41 /*SBR*/, 3 /*addr*/, 9, 9, 9, address),
+                'i' => self::insn(41, 4 /*indirect addr*/, 9, 9, 9, address),
+                _ => panic!("Invalid interpretation that should have been filtered")
+            })
+        }
         _ => Err(CompilationError::NoCompilation)
     }
 }
