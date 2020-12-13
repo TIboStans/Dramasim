@@ -167,7 +167,7 @@ fn insn_to_numerical<'a>(insn: &'a str, line: &Line<'a>, evaluation_context: &Co
         None => None,
         Some(int) => {
             if int.len() != 1 {
-                return Err(CompilationError::TooLongInterpretation(line.clone(), int.to_string()))
+                return Err(CompilationError::TooLongInterpretation(line.clone(), int.to_string()));
             }
             Some(char::from_str(int).unwrap().to_ascii_lowercase())
         }
@@ -194,6 +194,18 @@ fn insn_to_numerical<'a>(insn: &'a str, line: &Line<'a>, evaluation_context: &Co
         Err(e) => return Err(e),
         Ok(insn) => return Ok(insn)
     };
+
+    let (left_operand, right_operand) = trimmed_split(rhs, ", ");
+    let right_operand = match right_operand {
+        None => return Err(CompilationError::NoSecondOperand(line.clone(), opcode.to_string())),
+        Some(o) => o,
+    };
+
+    match parse_double_operand(opcode, &int, left_operand, right_operand, line.clone(), evaluation_context) {
+        Err(CompilationError::NoCompilation) => {}
+        Err(e) => return Err(e),
+        Ok(insn) => return Ok(insn)
+    }
 
     Err(CompilationError::NoCompilation)
 }
@@ -224,9 +236,13 @@ fn operand_to_reg(op: &str) -> Option<usize> {
 }
 
 macro_rules! deny_any_interpretation {
-    ($int:expr, $opcode:expr, $line:expr) => {
+    ($int:expr, $opcode:expr, $line:expr, $is_regreg:expr) => {
         if let Some(_) = $int {
-            return Err(CompilationError::UnexpectedInterpretation($line, $opcode))
+            return Err(CompilationError::UnexpectedInterpretation {
+                line: $line,
+                opcode: $opcode,
+                is_regreg: $is_regreg
+            })
         }
     };
 }
@@ -253,7 +269,7 @@ fn parse_single_operand<'a>(opcode: &str, int: &Option<char>, rhs: &'a str, line
     // Single-operand instructions:
     match opcode {
         "HST" => {
-            deny_any_interpretation!(int, opcode.to_string(), line);
+            deny_any_interpretation!(int, opcode.to_string(), line, false);
             // HST becomes HIA <reg>, 0(R8+)
             let r = operand_to_reg(rhs).into_result().map_err(|_| CompilationError::NotARegister {
                 line,
@@ -262,7 +278,7 @@ fn parse_single_operand<'a>(opcode: &str, int: &Option<char>, rhs: &'a str, line
             Ok(self::insn(FC_HIA, MOD1_VALUE, MOD2_INDEXATION_POST_INC, r as isize, 8, 0))
         }
         "BST" => {
-            deny_any_interpretation!(int, opcode.to_string(), line);
+            deny_any_interpretation!(int, opcode.to_string(), line, false);
             // BST becomes BIG <reg>, 0(-R8)
             let r = operand_to_reg(rhs).into_result().map_err(|_| CompilationError::NotARegister {
                 line,
@@ -282,6 +298,24 @@ fn parse_single_operand<'a>(opcode: &str, int: &Option<char>, rhs: &'a str, line
         }
         _ => Err(CompilationError::NoCompilation)
     }
+}
+
+#[inline]
+fn parse_double_operand<'a>(opcode: &str, int: &Option<char>, left_op: &'a str, right_op: &'a str, line: Line<'a>, _evaluation_context: &Context<f64>) -> Result<isize, CompilationError<'a>> {
+    // Preprocess reg-reg instructions
+    let (_int, _left_op, _right_op) = if let (Some(left_reg), Some(right_reg)) = (operand_to_reg(left_op), operand_to_reg(right_op)) {
+        match opcode {
+            "HIA" | "OPT" | "AFT" | "VER" | "DEL" | "MOD" | "VGL" => {
+                deny_any_interpretation!(int, opcode.to_string(), line, true);
+                (&Some('w'), format!("R{}", left_reg), format!("0(R{})", right_reg))
+            }
+            _ => return Err(CompilationError::RegRegUnsupported(line.clone(), opcode.to_string()))
+        }
+    } else {
+        (int, left_op.to_string(), right_op.to_string())
+    };
+
+    Err(CompilationError::NoCompilation)
 }
 
 /// Removes the label from a string without any other operations such as trimming. Label may be `None` if there is none present.

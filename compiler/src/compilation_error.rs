@@ -19,9 +19,15 @@ pub enum CompilationError<'a> {
         line: Line<'a>,
         malformed_operand: &'a str,
     },
-    UnexpectedInterpretation(Line<'a>, String),
+    UnexpectedInterpretation {
+        line: Line<'a>,
+        opcode: String,
+        is_regreg: bool
+    },
     UnsupportedInterpretation(Line<'a>, String, Vec<char>),
     TooLongInterpretation(Line<'a>, String),
+    NoSecondOperand(Line<'a>, String),
+    RegRegUnsupported(Line<'a>, String),
     NoCompilation,
 }
 
@@ -33,9 +39,11 @@ impl CompilationError<'_> {
             CompilationError::NoOperand { line, .. } => Some(line),
             CompilationError::Incomprehensible(line, ..) => Some(line),
             CompilationError::NotARegister { line, .. } => Some(line),
-            CompilationError::UnexpectedInterpretation(line, ..) => Some(line),
+            CompilationError::UnexpectedInterpretation { line, .. } => Some(line),
             CompilationError::UnsupportedInterpretation(line, ..) => Some(line),
             CompilationError::TooLongInterpretation(line, ..) => Some(line),
+            CompilationError::NoSecondOperand(line, ..) => Some(line),
+            CompilationError::RegRegUnsupported(line, ..) => Some(line),
             CompilationError::NoCompilation => None
         }
     }
@@ -51,9 +59,17 @@ impl std::fmt::Display for CompilationError<'_> {
             CompilationError::NoCompilation => write!(f, "No compilation happened"),
             CompilationError::NoOperand { opcode, .. } => write!(f, "Instruction `{}` expects an operand, but you provided none", opcode),
             CompilationError::NotARegister { malformed_operand, .. } => write!(f, "`{}` is not in the form of Rx, where 0 <= x <= 9.", malformed_operand),
-            CompilationError::UnexpectedInterpretation(_, op) => write!(f, "Instruction `{}` does not expect an interpretation", op),
+            CompilationError::UnexpectedInterpretation { opcode, is_regreg, .. } => {
+                if *is_regreg {
+                    write!(f, "Register-register operations using `{}` don't support interpretations", opcode)
+                } else {
+                    write!(f, "Instruction `{}` does not expect an interpretation", opcode)
+                }
+            },
             CompilationError::UnsupportedInterpretation(_, op, provides) => write!(f, "Instruction `{}` supports only interpretations {:?}", op, provides),
             CompilationError::TooLongInterpretation(_, int) => write!(f, "Interpretations consist of exactly one character, thus `{}` is invalid.", int),
+            CompilationError::NoSecondOperand(_, opcode) => write!(f, "Instruction `{}` expects two operands, but you provided only one", opcode),
+            CompilationError::RegRegUnsupported(_, opcode) => write!(f, "Register-register operations are not supported for `{}`", opcode),
             CompilationError::Incomprehensible(..) => write!(f, "Not a valid instruction or integer expression"),
         }
     }
