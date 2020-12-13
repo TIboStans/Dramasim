@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt::Debug;
-use mexprp::{Answer, EvalError};
+use mexprp::{Answer, EvalError, Context, Term};
 use crate::compilation_error::*;
 use std::str::pattern::Pattern;
 
@@ -48,8 +48,15 @@ fn main() {
 fn compile(source_code: &str) -> Result<Box<[(usize, isize)]>, CompilationError> {
     let filter = as_filtered_lines(source_code);
     let expanded = as_numbered_lines(&filter)?;
-    let _labels = map_labels(&expanded);
-    let numerical = to_numerical_representation(expanded)?;
+    let labels = map_labels(&expanded);
+    let evaluation_context = {
+        let mut context = Context::new();
+        for (key, value) in labels {
+            context.vars.insert(key.to_string(), Term::Num(Answer::Single(value as f64)));
+        }
+        context
+    };
+    let numerical = to_numerical_representation(expanded, evaluation_context)?;
 
     Ok(numerical.into_boxed_slice())
 }
@@ -80,6 +87,7 @@ fn as_filtered_lines(input: &str) -> Vec<&str> {
 fn as_numbered_lines<'a>(input: &Vec<&'a str>) -> Result<Vec<Line<'a>>, CompilationError<'a>> {
     let mut address_counter = 0usize;
     let mut lines = Vec::new();
+    let empty_context = Context::new();
     for line_number in 0..input.len() {
         let line = input[line_number];
 
@@ -93,7 +101,7 @@ fn as_numbered_lines<'a>(input: &Vec<&'a str>) -> Result<Vec<Line<'a>>, Compilat
         let (insn, operand) = trimmed_split(line_without_label, ' ');
         if insn == "RESGR" {
             if let Some(operand) = operand {
-                let value = calculate_expression(operand)
+                let value = calculate_expression(operand, &empty_context)
                     .map_err(|e| CompilationError::MathEval(line_struct.clone(), e))?;
                 let value: usize = usize::try_from(value)
                     .map_err(|_| CompilationError::NegativeRegisters { line: line_struct, expr: operand, value })?;
@@ -120,16 +128,16 @@ fn map_labels<'a>(numbered_lines: &Vec<Line<'a>>) -> HashMap<&'a str, usize> {
         }).collect()
 }
 
-fn to_numerical_representation(lines: Vec<Line>) -> Result<Vec<(usize, isize)>, CompilationError> {
+fn to_numerical_representation(lines: Vec<Line>, evaluation_context: Context<f64>) -> Result<Vec<(usize, isize)>, CompilationError> {
     let mut out = Vec::new();
     for line in lines {
         let str = line.line;
 
         let (_, line_without_label) = omit_label(str);
         let line_without_label = line_without_label.trim();
-        let numerical = match insn_to_numerical(line_without_label, &line) {
+        let numerical = match insn_to_numerical(line_without_label, &line, &evaluation_context) {
             Ok(insn) => insn,
-            Err(CompilationError::NoCompilation) => calculate_expression(line_without_label)
+            Err(CompilationError::NoCompilation) => calculate_expression(line_without_label, &evaluation_context)
                 .map_err(|e| CompilationError::Incomprehensible(line.clone(), e))?,
             e => e?
         };
@@ -140,7 +148,7 @@ fn to_numerical_representation(lines: Vec<Line>) -> Result<Vec<(usize, isize)>, 
     Ok(out)
 }
 
-fn insn_to_numerical<'a>(insn: &'a str, line: &Line<'a>) -> Result<isize, CompilationError<'a>> {
+fn insn_to_numerical<'a>(insn: &'a str, line: &Line<'a>, evaluation_context: &Context<f64>) -> Result<isize, CompilationError<'a>> {
     let (original_opcode, rhs) = trimmed_split(insn, ' ');
     let opcode = original_opcode.to_uppercase();
     let opcode = opcode.as_str();
@@ -198,8 +206,8 @@ fn trimmed_split<'a, P: Pattern<'a>>(string: &'a str, pattern: P) -> (&'a str, O
 /// Calculate an integer expression.
 /// If multiple answers are possible, arbitrarily return the first one found.
 /// Answers are calculated in f64 and converted to isize.
-fn calculate_expression(expr: &str) -> Result<isize, EvalError> {
-    match mexprp::eval::<f64>(expr) {
+fn calculate_expression(expr: &str, ctx: &Context<f64>) -> Result<isize, EvalError> {
+    match mexprp::eval_ctx::<f64>(expr, ctx) {
         Ok(Answer::Single(answer)) => Ok(answer as isize),
         Ok(Answer::Multiple(v)) => Ok(*v.first().unwrap() as isize),
         Err(e) => Err(e)
