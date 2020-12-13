@@ -11,8 +11,10 @@ use crate::compilation_error::*;
 use std::str::pattern::Pattern;
 use std::ops::Try;
 use std::str::FromStr;
+use constants::*;
 
 mod compilation_error;
+mod constants;
 
 #[derive(Debug, Clone)]
 pub struct Line<'a> {
@@ -198,12 +200,12 @@ fn insn_to_numerical<'a>(insn: &'a str, line: &Line<'a>, evaluation_context: &Co
 
 fn parse_no_operand(opcode: &str) -> Option<isize> {
     match opcode {
-        "KTG" => return Some(insn(42, 0, 0, 0, 0, 0)),
-        "LEZ" => return Some(insn(71, 0, 0, 0, 0, 0)),
-        "DRU" => return Some(insn(72, 0, 0, 0, 0, 0)),
-        "NWL" => return Some(insn(73, 0, 0, 0, 0, 0)),
-        "DRS" => return Some(insn(74, 0, 0, 0, 0, 0)),
-        "STP" => return Some(insn(99, 0, 0, 0, 0, 0)),
+        "KTG" => return Some(insn(FC_KTG, NA, NA, NA, NA, NA)),
+        "LEZ" => return Some(insn(FC_LEZ, NA, NA, NA, NA, NA)),
+        "DRU" => return Some(insn(FC_DRU, NA, NA, NA, NA, NA)),
+        "NWL" => return Some(insn(FC_NWL, NA, NA, NA, NA, NA)),
+        "DRS" => return Some(insn(FC_DRS, NA, NA, NA, NA, NA)),
+        "STP" => return Some(insn(FC_STP, NA, NA, NA, NA, NA)),
         "NOP" => return Some(0), // TODO: HIA R0, R0
         _ => None
     }
@@ -257,7 +259,7 @@ fn parse_single_operand<'a>(opcode: &str, int: &Option<char>, rhs: &'a str, line
                 line,
                 malformed_operand: rhs,
             })?;
-            Ok(self::insn(11 /*HIA*/, 1 /*value*/, 4 /*indexation post-inc*/, r as isize, 8, 0))
+            Ok(self::insn(FC_HIA, MOD1_VALUE, MOD2_INDEXATION_POST_INC, r as isize, 8, 0))
         }
         "BST" => {
             deny_any_interpretation!(int, opcode.to_string(), line);
@@ -266,15 +268,15 @@ fn parse_single_operand<'a>(opcode: &str, int: &Option<char>, rhs: &'a str, line
                 line,
                 malformed_operand: rhs,
             })?;
-            Ok(self::insn(12 /*BIG*/, 1 /*value*/, 5 /*indexation pre-dec*/, r as isize, 8, 0))
+            Ok(self::insn(FC_BIG, MOD1_VALUE, MOD2_INDEXATION_PRE_DEC, r as isize, 8, 0))
         }
         "SBR" => {
             let int = allow_only_interpretations!(int, opcode.to_string(), line, 'd', 'i');
             let address = calculate_expression(rhs, evaluation_context)
                 .map_err(|e| CompilationError::MathEval(line, e))?;
             Ok(match int {
-                'd' => self::insn(41 /*SBR*/, 3 /*addr*/, 9, 9, 9, address),
-                'i' => self::insn(41, 4 /*indirect addr*/, 9, 9, 9, address),
+                'd' => self::insn(FC_SBR, MOD1_ADDRESS, NA, NA, NA, address),
+                'i' => self::insn(FC_SBR, MOD1_INDIRECT_ADDRESS, NA, NA, NA, address),
                 _ => panic!("Invalid interpretation that should have been filtered")
             })
         }
