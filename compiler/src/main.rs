@@ -35,7 +35,9 @@ fn main() {
                 let line_str = line.line;
                 println!("\nOn line {} \t[address {}]", line.line_number, line.address);
                 println!("\t{}", line_str);
-                println!("\t{} {}", (0..line_str.len()).map(|_| '^').collect::<String>(), e)
+                println!("\t{} {}", (0..line_str.len())
+                    .map(|i| if &line_str[i..=i] == "\t" { '\t' } else { '^' })
+                    .collect::<String>(), e)
             } else {
                 println!("{}", e);
             }
