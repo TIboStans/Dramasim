@@ -154,15 +154,8 @@ fn insn_to_numerical<'a>(insn: &'a str, line: &Line<'a>, evaluation_context: &Co
     let opcode = original_opcode.to_uppercase();
     let opcode = opcode.as_str();
 
-    match opcode {
-        "KTG" => return Ok(self::insn(42, 0, 0, 0, 0, 0)),
-        "LEZ" => return Ok(self::insn(71, 0, 0, 0, 0, 0)),
-        "DRU" => return Ok(self::insn(72, 0, 0, 0, 0, 0)),
-        "NWL" => return Ok(self::insn(73, 0, 0, 0, 0, 0)),
-        "DRS" => return Ok(self::insn(74, 0, 0, 0, 0, 0)),
-        "STP" => return Ok(self::insn(99, 0, 0, 0, 0, 0)),
-        "NOP" => return Ok(0), // TODO: HIA R0, R0
-        _ => {}
+    if let Some(insn) = parse_no_operand(opcode) {
+        return Ok(insn)
     }
 
     let (opcode, _int) = trimmed_split(opcode, '.');
@@ -223,6 +216,19 @@ fn insn_to_numerical<'a>(insn: &'a str, line: &Line<'a>, evaluation_context: &Co
     }
 
     Err(CompilationError::NoCompilation)
+}
+
+fn parse_no_operand(opcode: &str) -> Option<isize> {
+    match opcode {
+        "KTG" => return Some(insn(42, 0, 0, 0, 0, 0)),
+        "LEZ" => return Some(insn(71, 0, 0, 0, 0, 0)),
+        "DRU" => return Some(insn(72, 0, 0, 0, 0, 0)),
+        "NWL" => return Some(insn(73, 0, 0, 0, 0, 0)),
+        "DRS" => return Some(insn(74, 0, 0, 0, 0, 0)),
+        "STP" => return Some(insn(99, 0, 0, 0, 0, 0)),
+        "NOP" => return Some(0), // TODO: HIA R0, R0
+        _ => None
+    }
 }
 
 /// Removes the label from a string without any other operations such as trimming. Label may be `None` if there is none present.
