@@ -236,13 +236,9 @@ fn operand_to_reg(op: &str) -> Option<usize> {
 }
 
 macro_rules! deny_any_interpretation {
-    ($int:expr, $opcode:expr, $line:expr, $is_regreg:expr) => {
+    ($int:expr, $opcode:expr, $line:expr) => {
         if let Some(_) = $int {
-            return Err(CompilationError::UnexpectedInterpretation {
-                line: $line,
-                opcode: $opcode,
-                is_regreg: $is_regreg
-            })
+            return Err(CompilationError::UnexpectedInterpretation($line, $opcode));
         }
     };
 }
@@ -269,7 +265,7 @@ fn parse_single_operand<'a>(opcode: &str, int: &Option<char>, rhs: &'a str, line
     // Single-operand instructions:
     match opcode {
         "HST" => {
-            deny_any_interpretation!(int, opcode.to_string(), line, false);
+            deny_any_interpretation!(int, opcode.to_string(), line);
             // HST becomes HIA <reg>, 0(R8+)
             let r = operand_to_reg(rhs).into_result().map_err(|_| CompilationError::NotARegister {
                 line,
@@ -278,7 +274,7 @@ fn parse_single_operand<'a>(opcode: &str, int: &Option<char>, rhs: &'a str, line
             Ok(self::insn(FC_HIA, MOD1_VALUE, MOD2_INDEXATION_POST_INC, r as isize, 8, 0))
         }
         "BST" => {
-            deny_any_interpretation!(int, opcode.to_string(), line, false);
+            deny_any_interpretation!(int, opcode.to_string(), line);
             // BST becomes BIG <reg>, 0(-R8)
             let r = operand_to_reg(rhs).into_result().map_err(|_| CompilationError::NotARegister {
                 line,
@@ -306,7 +302,9 @@ fn parse_double_operand<'a>(opcode: &str, int: &Option<char>, left_op: &'a str, 
     let (_int, _left_op, _right_op) = if let (Some(left_reg), Some(right_reg)) = (operand_to_reg(left_op), operand_to_reg(right_op)) {
         match opcode {
             "HIA" | "OPT" | "AFT" | "VER" | "DEL" | "MOD" | "VGL" => {
-                deny_any_interpretation!(int, opcode.to_string(), line, true);
+                if let Some(_) = int {
+                    return Err(CompilationError::RegRegInterpretation(line, opcode.to_string()));
+                }
                 (&Some('w'), format!("R{}", left_reg), format!("0(R{})", right_reg))
             }
             _ => return Err(CompilationError::RegRegUnsupported(line.clone(), opcode.to_string()))
