@@ -158,7 +158,7 @@ fn insn_to_numerical<'a>(insn: &'a str, line: &Line<'a>, evaluation_context: &Co
         return Ok(insn)
     }
 
-    let (opcode, _int) = trimmed_split(opcode, '.');
+    let (opcode, int) = trimmed_split(opcode, '.');
 
     const LEFTOVER_INSNS: [&str; 13] = ["HIA", "BIG", "OPT", "AFT", "VER", "DEL", "MOD", "VGL", "SPR", "VSP", "SBR", "BST", "HST"];
     if !LEFTOVER_INSNS.contains(&opcode) {
@@ -176,7 +176,7 @@ fn insn_to_numerical<'a>(insn: &'a str, line: &Line<'a>, evaluation_context: &Co
         })
     };
 
-    match parse_single_operand(opcode, rhs, line.clone(), evaluation_context) {
+    match parse_single_operand(opcode, &int, rhs, line.clone(), evaluation_context) {
         Err(CompilationError::NoCompilation) => {}, // do nothing
         Err(e) => return Err(e),
         Ok(insn) => return Ok(insn)
@@ -210,11 +210,20 @@ fn operand_to_reg(op: &str) -> Option<usize> {
     Some(r)
 }
 
+macro_rules! deny_interpretation {
+    ($int:expr, $opcode:expr, $line:expr) => {
+        if let Some(_) = $int {
+            return Err(CompilationError::UnexpectedInterpretation($line, $opcode))
+        }
+    };
+}
+
 #[inline]
-fn parse_single_operand<'a>(opcode: &str, rhs: &'a str, line: Line<'a>, evaluation_context: &Context<f64>) -> Result<isize, CompilationError<'a>> {
+fn parse_single_operand<'a>(opcode: &str, int: &Option<&str>, rhs: &'a str, line: Line<'a>, evaluation_context: &Context<f64>) -> Result<isize, CompilationError<'a>> {
     // Single-operand instructions:
     match opcode {
         "HST" => {
+            deny_interpretation!(int, opcode.to_string(), line);
             // HST becomes HIA <reg>, 0(R8+)
             let r = operand_to_reg(rhs).into_result().map_err(|_| CompilationError::NotARegister {
                 line,
@@ -223,6 +232,7 @@ fn parse_single_operand<'a>(opcode: &str, rhs: &'a str, line: Line<'a>, evaluati
             Ok(self::insn(11 /*HIA*/, 1 /*value*/, 4 /*indexation post-inc*/, r as isize, 8, 0))
         },
         "BST" => {
+            deny_interpretation!(int, opcode.to_string(), line);
             // BST becomes BIG <reg>, 0(-R8)
             let r = operand_to_reg(rhs).into_result().map_err(|_| CompilationError::NotARegister {
                 line,
