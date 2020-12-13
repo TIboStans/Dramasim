@@ -9,6 +9,7 @@ use std::fmt::Debug;
 use mexprp::{Answer, EvalError, Context, Term};
 use crate::compilation_error::*;
 use std::str::pattern::Pattern;
+use std::ops::Try;
 
 mod compilation_error;
 
@@ -160,7 +161,7 @@ fn insn_to_numerical<'a>(insn: &'a str, line: &Line<'a>, evaluation_context: &Co
         "NWL" => return Ok(self::insn(73, 0, 0, 0, 0, 0)),
         "DRS" => return Ok(self::insn(74, 0, 0, 0, 0, 0)),
         "STP" => return Ok(self::insn(99, 0, 0, 0, 0, 0)),
-        "NOP" => return Ok(0),
+        "NOP" => return Ok(0), // TODO: HIA R0, R0
         _ => {}
     }
 
@@ -174,10 +175,52 @@ fn insn_to_numerical<'a>(insn: &'a str, line: &Line<'a>, evaluation_context: &Co
     // All instructions without operands have been parsed at this point,
     // and any invalid instructions have already thrown a NoCompilation error.
     // - let's toss an error if there is no right hand side at this point.
-    let _rhs = match rhs {
+    let rhs = match rhs {
         Some(s) => s,
-        None => return Err(CompilationError::NoOperand { line: line.clone(), opcode: original_opcode })
+        None => return Err(CompilationError::NoOperand {
+            line: line.clone(),
+            opcode: original_opcode
+        })
     };
+
+    fn operand_to_reg(op: &str) -> Option<usize> {
+        if op.len() != 2 || &op[0..1] != "R" {
+            return None
+        }
+
+        let r = &op[1..2];
+        let r = r.parse().ok()?;
+        // It is not necessary to check that 0 <= R <= 9,
+        // as all of those values exclusively fit the condition that op.len() == 2.
+        Some(r)
+    }
+
+    // Single-operand instructions:
+    match opcode {
+        "HST" => {
+            // HST becomes HIA <reg>, 0(R8+)
+            let r = operand_to_reg(rhs).into_result().map_err(|_| CompilationError::NotARegister {
+                line: line.clone(),
+                malformed_operand: rhs
+            })?;
+            return Ok(self::insn(11 /*HIA*/, 1 /*value*/, 4 /*indexation post-inc*/, r as isize, 8, 0));
+        },
+        "BST" => {
+            // BST becomes BIG <reg>, 0(-R8)
+            let r = operand_to_reg(rhs).into_result().map_err(|_| CompilationError::NotARegister {
+                line: line.clone(),
+                malformed_operand: rhs
+            })?;
+            return Ok(self::insn(12 /*BIG*/, 1 /*value*/, 5 /*indexation pre-dec*/, r as isize, 8, 0));
+        },
+        "SBR" => {
+            let address = calculate_expression(rhs, evaluation_context)
+                .map_err(|e| CompilationError::MathEval(line.clone(), e))?;
+            // TODO: .i
+            return Ok(self::insn(41 /*SBR*/, 9, 9, 9, 9, address))
+        },
+        _ => {}
+    }
 
     Err(CompilationError::NoCompilation)
 }

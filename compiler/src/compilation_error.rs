@@ -15,6 +15,10 @@ pub enum CompilationError<'a> {
         opcode: &'a str,
     },
     Incomprehensible(Line<'a>, EvalError),
+    NotARegister {
+        line: Line<'a>,
+        malformed_operand: &'a str
+    },
     NoCompilation,
 }
 
@@ -25,6 +29,7 @@ impl CompilationError<'_> {
             CompilationError::NegativeRegisters { line, .. } => Some(line),
             CompilationError::NoOperand { line, .. } => Some(line),
             CompilationError::Incomprehensible(line, ..) => Some(line),
+            CompilationError::NotARegister { line, .. } => Some(line),
             CompilationError::NoCompilation => None
         }
     }
@@ -39,6 +44,7 @@ impl std::fmt::Display for CompilationError<'_> {
             CompilationError::NegativeRegisters { .. } => write!(f, "RESGR expects a non-negative operand"),
             CompilationError::NoCompilation => write!(f, "No compilation happened"),
             CompilationError::NoOperand { opcode, .. } => write!(f, "Instruction `{}` expects an operand, but you provided none", opcode),
+            CompilationError::NotARegister { malformed_operand, .. } => write!(f, "`{}` is not in the form of Rx, where 0 <= x <= 9.", malformed_operand),
             CompilationError::Incomprehensible(..) => write!(f, "Not a valid instruction or integer expression"),
         }
     }
