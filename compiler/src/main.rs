@@ -176,44 +176,11 @@ fn insn_to_numerical<'a>(insn: &'a str, line: &Line<'a>, evaluation_context: &Co
         })
     };
 
-    fn operand_to_reg(op: &str) -> Option<usize> {
-        if op.len() != 2 || &op[0..1] != "R" {
-            return None
-        }
-
-        let r = &op[1..2];
-        let r = r.parse().ok()?;
-        // It is not necessary to check that 0 <= R <= 9,
-        // as all of those values exclusively fit the condition that op.len() == 2.
-        Some(r)
-    }
-
-    // Single-operand instructions:
-    match opcode {
-        "HST" => {
-            // HST becomes HIA <reg>, 0(R8+)
-            let r = operand_to_reg(rhs).into_result().map_err(|_| CompilationError::NotARegister {
-                line: line.clone(),
-                malformed_operand: rhs
-            })?;
-            return Ok(self::insn(11 /*HIA*/, 1 /*value*/, 4 /*indexation post-inc*/, r as isize, 8, 0));
-        },
-        "BST" => {
-            // BST becomes BIG <reg>, 0(-R8)
-            let r = operand_to_reg(rhs).into_result().map_err(|_| CompilationError::NotARegister {
-                line: line.clone(),
-                malformed_operand: rhs
-            })?;
-            return Ok(self::insn(12 /*BIG*/, 1 /*value*/, 5 /*indexation pre-dec*/, r as isize, 8, 0));
-        },
-        "SBR" => {
-            let address = calculate_expression(rhs, evaluation_context)
-                .map_err(|e| CompilationError::MathEval(line.clone(), e))?;
-            // TODO: .i
-            return Ok(self::insn(41 /*SBR*/, 9, 9, 9, 9, address))
-        },
-        _ => {}
-    }
+    match parse_single_operand(opcode, rhs, line.clone(), evaluation_context) {
+        Err(CompilationError::NoCompilation) => {}, // do nothing
+        Err(e) => return Err(e),
+        Ok(insn) => return Ok(insn)
+    };
 
     Err(CompilationError::NoCompilation)
 }
@@ -228,6 +195,48 @@ fn parse_no_operand(opcode: &str) -> Option<isize> {
         "STP" => return Some(insn(99, 0, 0, 0, 0, 0)),
         "NOP" => return Some(0), // TODO: HIA R0, R0
         _ => None
+    }
+}
+
+fn operand_to_reg(op: &str) -> Option<usize> {
+    if op.len() != 2 || &op[0..1] != "R" {
+        return None
+    }
+
+    let r = &op[1..2];
+    let r = r.parse().ok()?;
+    // It is not necessary to check that 0 <= R <= 9,
+    // as all of those values exclusively fit the condition that op.len() == 2.
+    Some(r)
+}
+
+#[inline]
+fn parse_single_operand<'a>(opcode: &str, rhs: &'a str, line: Line<'a>, evaluation_context: &Context<f64>) -> Result<isize, CompilationError<'a>> {
+    // Single-operand instructions:
+    match opcode {
+        "HST" => {
+            // HST becomes HIA <reg>, 0(R8+)
+            let r = operand_to_reg(rhs).into_result().map_err(|_| CompilationError::NotARegister {
+                line,
+                malformed_operand: rhs
+            })?;
+            Ok(self::insn(11 /*HIA*/, 1 /*value*/, 4 /*indexation post-inc*/, r as isize, 8, 0))
+        },
+        "BST" => {
+            // BST becomes BIG <reg>, 0(-R8)
+            let r = operand_to_reg(rhs).into_result().map_err(|_| CompilationError::NotARegister {
+                line,
+                malformed_operand: rhs
+            })?;
+            Ok(self::insn(12 /*BIG*/, 1 /*value*/, 5 /*indexation pre-dec*/, r as isize, 8, 0))
+        },
+        "SBR" => {
+            let address = calculate_expression(rhs, evaluation_context)
+                .map_err(|e| CompilationError::MathEval(line, e))?;
+            // TODO: .i
+            Ok(self::insn(41 /*SBR*/, 9, 9, 9, 9, address))
+        },
+        _ => Err(CompilationError::NoCompilation)
     }
 }
 
