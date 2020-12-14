@@ -16,7 +16,7 @@ use constants::*;
 mod compilation_error;
 mod constants;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct Line<'a> {
     address: usize,
     line_number: usize,
@@ -272,7 +272,7 @@ fn parse_single_operand<'a>(opcode: &str, int: &Option<char>, rhs: &'a str, line
             // HST becomes HIA <reg>, 0(R8+)
             let r = operand_to_reg(rhs).into_result().map_err(|_| CompilationError::NotARegister {
                 line,
-                malformed_operand: rhs,
+                malformed_operand: rhs.to_string(),
             })?;
             Ok(self::insn(FC_HIA, MOD1_VALUE, MOD2_INDEXATION_POST_INC, r as isize, 8, 0))
         }
@@ -281,7 +281,7 @@ fn parse_single_operand<'a>(opcode: &str, int: &Option<char>, rhs: &'a str, line
             // BST becomes BIG <reg>, 0(-R8)
             let r = operand_to_reg(rhs).into_result().map_err(|_| CompilationError::NotARegister {
                 line,
-                malformed_operand: rhs,
+                malformed_operand: rhs.to_string(),
             })?;
             Ok(self::insn(FC_BIG, MOD1_VALUE, MOD2_INDEXATION_PRE_DEC, r as isize, 8, 0))
         }
@@ -300,9 +300,9 @@ fn parse_single_operand<'a>(opcode: &str, int: &Option<char>, rhs: &'a str, line
 }
 
 #[inline]
-fn parse_double_operand<'a>(opcode: &str, int: &Option<char>, left_op: &'a str, right_op: &'a str, line: Line<'a>, _evaluation_context: &Context<f64>) -> Result<isize, CompilationError<'a>> {
+fn parse_double_operand<'a>(opcode: &str, int: &Option<char>, left_op: &'a str, right_op: &'a str, line: Line<'a>, evaluation_context: &Context<f64>) -> Result<isize, CompilationError<'a>> {
     // Preprocess reg-reg instructions
-    let (_int, _left_op, _right_op) = if let (Some(left_reg), Some(right_reg)) = (operand_to_reg(left_op), operand_to_reg(right_op)) {
+    let (_int, _left_op, right_op) = if let (Some(left_reg), Some(right_reg)) = (operand_to_reg(left_op), operand_to_reg(right_op)) {
         match opcode {
             "HIA" | "OPT" | "AFT" | "VER" | "DEL" | "MOD" | "VGL" => {
                 if let Some(_) = int {
@@ -316,7 +316,61 @@ fn parse_double_operand<'a>(opcode: &str, int: &Option<char>, left_op: &'a str, 
         (int, left_op.to_string(), right_op.to_string())
     };
 
+    let _fc = match opcode {
+        "HIA" => FC_HIA,
+        "BIG" => FC_BIG,
+        "OPT" => FC_OPT,
+        "AFT" => FC_AFT,
+        "VER" => FC_VER,
+        "DEL" => FC_DEL,
+        "MOD" => FC_MOD,
+        "VGL" => FC_VGL,
+        "SPR" => FC_SPR,
+        "VSP" => FC_VSP,
+        _ => panic!("Found opcode that should have been filtered")
+    };
+
+    let (op, mod2, idx) = parse_address_indexed(right_op, line.clone(), evaluation_context)?;
+    println!("{} {} {}", op, mod2, idx);
+
     Err(CompilationError::NoCompilation)
+}
+
+/// Parse an operand in the form of ADDRESS\[(\[+-\]Rx\[+-\])\]
+///
+/// Returns a tuple `(operand, mod2, idx)`
+fn parse_address_indexed<'a>(operand: String, line: Line<'a>, evaluation_context: &Context<f64>) -> Result<(isize, isize, isize), CompilationError<'a>> {
+    let (address, indexation) = trimmed_split(operand.as_str(), "(");
+
+    let address = calculate_expression(address, evaluation_context)
+        .map_err(|e| CompilationError::MathEval(line, e))?;
+
+    let (mod2, idx) = if let Some(indexation) = indexation {
+        let indexation = indexation.trim_end_matches(")");
+        let first_char = &indexation[0..=1];
+        let last_char = &indexation[indexation.len() - 1..];
+        let (mod2, reg) = if let "+" | "-" = first_char {
+            let rest = &indexation[1..];
+            (if first_char == "+" { MOD2_INDEXATION_PRE_INC } else { MOD2_INDEXATION_PRE_DEC }, rest)
+        } else if let "+" | "-" = last_char {
+            let rest = &indexation[0..indexation.len() - 1];
+            (if last_char == "+" { MOD2_INDEXATION_POST_INC } else { MOD2_INDEXATION_POST_DEC }, rest)
+        } else {
+            (MOD2_INDEXATION, indexation)
+        };
+        let reg = operand_to_reg(reg)
+            .into_result()
+            .map_err(|_| CompilationError::NotARegister {
+                line,
+                malformed_operand: reg.to_string(),
+            })?;
+
+        (mod2, reg as isize)
+    } else {
+        (MOD2_NO_INDEXATION, 9)
+    };
+
+    Ok((address, mod2, idx))
 }
 
 /// Removes the label from a string without any other operations such as trimming. Label may be `None` if there is none present.

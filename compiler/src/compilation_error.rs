@@ -17,7 +17,7 @@ pub enum CompilationError<'a> {
     Incomprehensible(Line<'a>, EvalError),
     NotARegister {
         line: Line<'a>,
-        malformed_operand: &'a str,
+        malformed_operand: String,
     },
     UnexpectedInterpretation(Line<'a>, String),
     UnsupportedInterpretation(Line<'a>, String, Vec<char>),
