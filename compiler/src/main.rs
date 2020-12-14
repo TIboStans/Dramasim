@@ -50,9 +50,8 @@ fn main() {
 }
 
 fn compile(source_code: &str) -> Result<Box<[(usize, isize)]>, CompilationError> {
-    let filter = as_filtered_lines(source_code);
-    let expanded = as_numbered_lines(&filter)?;
-    let labels = map_labels(&expanded);
+    let filtered = as_filtered_lines(source_code);
+    let (expanded, labels) = expand_and_omit_labels(&filtered)?;
     let evaluation_context = {
         let mut context = Context::new();
         for (key, value) in labels {
@@ -87,21 +86,30 @@ fn as_filtered_lines(input: &str) -> Vec<&str> {
     lines
 }
 
-/// Parses filtered code, expanding RESGR where needed.
-fn as_numbered_lines<'a>(input: &Vec<&'a str>) -> Result<Vec<Line<'a>>, CompilationError<'a>> {
+/// Parses filtered code, expanding RESGR where needed, and removing labels.
+fn expand_and_omit_labels<'a>(input: &Vec<&'a str>) -> Result<(Vec<Line<'a>>, HashMap<&'a str, usize>), CompilationError<'a>> {
     let mut address_counter = 0usize;
     let mut lines = Vec::new();
+    let mut labels = HashMap::new();
     let empty_context = Context::new();
     for line_number in 0..input.len() {
         let line = input[line_number];
 
+        let (label, line_without_label) = omit_label(line);
+        let line_without_label = line_without_label.trim();
+        if let Some(label) = label {
+            labels.insert(label, address_counter);
+        }
+        if line_without_label.trim().is_empty() {
+            continue;
+        }
+
         let line_struct = Line {
             address: address_counter,
             line_number: line_number + 1, // line numbers start at 1
-            line,
+            line: line_without_label,
         };
 
-        let (_, line_without_label) = omit_label(line);
         let (insn, operand) = trimmed_split(line_without_label, ' ');
         if insn == "RESGR" {
             if let Some(operand) = operand {
@@ -109,27 +117,18 @@ fn as_numbered_lines<'a>(input: &Vec<&'a str>) -> Result<Vec<Line<'a>>, Compilat
                     .map_err(|e| CompilationError::MathEval(line_struct.clone(), e))?;
                 let value: usize = usize::try_from(value)
                     .map_err(|_| CompilationError::NegativeRegisters { line: line_struct, expr: operand, value })?;
-                address_counter += value - 1; // +1 later
+                address_counter += value;
             } else {
                 return Err(CompilationError::NoOperand { line: line_struct, opcode: "RESGR" });
             }
+        } else {
+            lines.push(line_struct);
+            address_counter += 1;
         }
 
-        lines.push(line_struct);
-        address_counter += 1;
     }
 
-    Ok(lines)
-}
-
-/// Inspects numbered lines, returning a map of all labels and their corresponding memory address.
-fn map_labels<'a>(numbered_lines: &Vec<Line<'a>>) -> HashMap<&'a str, usize> {
-    numbered_lines.iter()
-        .filter_map(|line| {
-            let (label, _) = omit_label(line.line);
-
-            label.map(|label| (label, line.address))
-        }).collect()
+    Ok((lines, labels))
 }
 
 fn to_numerical_representation(lines: Vec<Line>, evaluation_context: Context<f64>) -> Result<Vec<(usize, isize)>, CompilationError> {
@@ -139,9 +138,6 @@ fn to_numerical_representation(lines: Vec<Line>, evaluation_context: Context<f64
 
         let (_, line_without_label) = omit_label(str);
         let line_without_label = line_without_label.trim();
-        if line_without_label.starts_with("RESGR") {
-            continue;
-        }
         let numerical = match insn_to_numerical(line_without_label, &line, &evaluation_context) {
             Ok(insn) => insn,
             Err(CompilationError::NoCompilation) => calculate_expression(line_without_label, &evaluation_context)
@@ -156,7 +152,7 @@ fn to_numerical_representation(lines: Vec<Line>, evaluation_context: Context<f64
 }
 
 fn insn_to_numerical<'a>(insn: &'a str, line: &Line<'a>, evaluation_context: &Context<f64>) -> Result<isize, CompilationError<'a>> {
-    let (original_opcode, rhs) = trimmed_split(insn, ' ');
+    let (original_opcode, rhs) = trimmed_split(insn, |c: char| c.is_whitespace());
     let opcode = original_opcode.to_uppercase();
     let opcode = opcode.as_str();
 
@@ -303,7 +299,7 @@ fn parse_single_operand<'a>(opcode: &str, int: &Option<char>, rhs: &'a str, line
 #[inline]
 fn parse_double_operand<'a>(opcode: &str, int: &Option<char>, left_op: &'a str, right_op: &'a str, line: Line<'a>, evaluation_context: &Context<f64>) -> Result<isize, CompilationError<'a>> {
     // Preprocess reg-reg instructions
-    let (_int, _left_op, right_op) = if let (Some(left_reg), Some(right_reg)) = (operand_to_reg(left_op), operand_to_reg(right_op)) {
+    let (_int, left_op, right_op) = if let (Some(left_reg), Some(right_reg)) = (operand_to_reg(left_op), operand_to_reg(right_op)) {
         match opcode {
             "HIA" | "OPT" | "AFT" | "VER" | "DEL" | "MOD" | "VGL" => {
                 if let Some(_) = int {
@@ -331,9 +327,26 @@ fn parse_double_operand<'a>(opcode: &str, int: &Option<char>, left_op: &'a str, 
     };
 
     let (op, mod2, idx) = parse_address_indexed(right_op, line.clone(), evaluation_context)?;
-    println!("{} {} {}", op, mod2, idx);
+    let int = match int {
+        None => 'd',
+        Some(i) => *i,
+    };
+    let mod1: isize = {
+        let mut mod1 = match int {
+            'w' => 1,
+            'd' => 3,
+            'i' => 4,
+            _ => panic!("Invalid interpretation")
+        };
+        if let "BIG" | "SPR" | "VSP" = opcode {
+            mod1 -= 1;
+        }
+        mod1
+    };
 
-    Err(CompilationError::NoCompilation)
+    let reg = operand_to_reg(left_op.as_str()).into_result().map_err(|_| CompilationError::NotARegister { line, malformed_operand: left_op })? as isize;
+
+    Ok(self::insn(fc, mod1, mod2, reg, idx, op))
 }
 
 /// Parse an operand in the form of ADDRESS\[(\[+-\]Rx\[+-\])\]
