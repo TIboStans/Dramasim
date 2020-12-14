@@ -109,14 +109,14 @@ fn as_numbered_lines<'a>(input: &Vec<&'a str>) -> Result<Vec<Line<'a>>, Compilat
                     .map_err(|e| CompilationError::MathEval(line_struct.clone(), e))?;
                 let value: usize = usize::try_from(value)
                     .map_err(|_| CompilationError::NegativeRegisters { line: line_struct, expr: operand, value })?;
-                address_counter += value;
+                address_counter += value - 1; // +1 later
             } else {
                 return Err(CompilationError::NoOperand { line: line_struct, opcode: "RESGR" });
             }
-        } else {
-            lines.push(line_struct);
-            address_counter += 1;
         }
+
+        lines.push(line_struct);
+        address_counter += 1;
     }
 
     Ok(lines)
@@ -139,6 +139,9 @@ fn to_numerical_representation(lines: Vec<Line>, evaluation_context: Context<f64
 
         let (_, line_without_label) = omit_label(str);
         let line_without_label = line_without_label.trim();
+        if line_without_label.starts_with("RESGR") {
+            continue;
+        }
         let numerical = match insn_to_numerical(line_without_label, &line, &evaluation_context) {
             Ok(insn) => insn,
             Err(CompilationError::NoCompilation) => calculate_expression(line_without_label, &evaluation_context)
