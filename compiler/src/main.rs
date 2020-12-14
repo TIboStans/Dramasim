@@ -176,7 +176,7 @@ fn insn_to_numerical<'a>(insn: &'a str, line: &Line<'a>, evaluation_context: &Co
         }
     };
 
-    const LEFTOVER_INSNS: [&str; 13] = ["HIA", "BIG", "OPT", "AFT", "VER", "DEL", "MOD", "VGL", "SPR", "VSP", "SBR", "BST", "HST"];
+    const LEFTOVER_INSNS: [&str; 12] = ["HIA", "BIG", "OPT", "AFT", "VER", "DEL", "MOD", "VGL", "VSP", "SBR", "BST", "HST"];
     if !LEFTOVER_INSNS.contains(&opcode) {
         return Err(CompilationError::NoCompilation);
     }
@@ -285,13 +285,14 @@ fn parse_single_operand<'a>(opcode: &str, int: &Option<char>, rhs: &'a str, line
             })?;
             Ok(self::insn(FC_BIG, MOD1_VALUE, MOD2_INDEXATION_PRE_DEC, r as isize, 8, 0))
         }
-        "SBR" => {
+        "SBR" | "SPR" => {
             let int = allow_only_interpretations!(int, opcode.to_string(), line, 'd', 'i');
             let address = calculate_expression(rhs, evaluation_context)
                 .map_err(|e| CompilationError::MathEval(line, e))?;
+            let fc = if opcode == "SBR" { FC_SBR } else { FC_SPR };
             Ok(match int {
-                'd' => self::insn(FC_SBR, MOD1_ADDRESS, NA, NA, NA, address),
-                'i' => self::insn(FC_SBR, MOD1_INDIRECT_ADDRESS, NA, NA, NA, address),
+                'd' => self::insn(fc, MOD1_ADDRESS, NA, NA, NA, address),
+                'i' => self::insn(fc, MOD1_INDIRECT_ADDRESS, NA, NA, NA, address),
                 _ => panic!("Invalid interpretation that should have been filtered")
             })
         }
@@ -316,7 +317,7 @@ fn parse_double_operand<'a>(opcode: &str, int: &Option<char>, left_op: &'a str, 
         (int, left_op.to_string(), right_op.to_string())
     };
 
-    let _fc = match opcode {
+    let fc = match opcode {
         "HIA" => FC_HIA,
         "BIG" => FC_BIG,
         "OPT" => FC_OPT,
@@ -325,7 +326,6 @@ fn parse_double_operand<'a>(opcode: &str, int: &Option<char>, left_op: &'a str, 
         "DEL" => FC_DEL,
         "MOD" => FC_MOD,
         "VGL" => FC_VGL,
-        "SPR" => FC_SPR,
         "VSP" => FC_VSP,
         _ => panic!("Found opcode that should have been filtered")
     };
